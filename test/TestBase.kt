@@ -23,7 +23,6 @@ abstract class TestBase(
             .actorsAfter(0)
             .checkObstructionFreedom(checkObstructionFreedom)
             .sequentialSpecification(sequentialSpecification.java)
-            .logLevel(LoggingLevel.INFO)
             .apply { customConfiguration() }
             .check(this::class.java)
     } catch (t: Throwable) {
