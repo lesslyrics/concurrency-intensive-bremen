@@ -7,10 +7,14 @@ import org.jetbrains.kotlinx.lincheck.paramgen.*
 @Param(name = "element", gen = IntGen::class, conf = "0:3")
 abstract class AbstractQueueTest(
     private val queue: Queue<Int>,
-    checkObstructionFreedom: Boolean = true
+    checkObstructionFreedom: Boolean = true,
+    threads: Int = 3,
+    actorsBefore: Int = 1
 ) : TestBase(
     sequentialSpecification = IntQueueSequential::class,
-    checkObstructionFreedom = checkObstructionFreedom
+    checkObstructionFreedom = checkObstructionFreedom,
+    threads = threads,
+    actorsBefore = actorsBefore
 ) {
     @Operation
     fun enqueue(@Param(name = "element") element: Int) = queue.enqueue(element)
