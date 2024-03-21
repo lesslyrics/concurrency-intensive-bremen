@@ -5,7 +5,7 @@ import java.util.concurrent.atomic.*
 import kotlin.math.*
 
 class FAABasedQueueSimplified<E> : Queue<E> {
-    private val infiniteArray = AtomicReferenceArray<Any?>(1024) // conceptually infinite array
+    private val infiniteArray = AtomicReferenceArray<Any?>(100) // conceptually infinite array
     private val enqIdx = AtomicLong(0)
     private val deqIdx = AtomicLong(0)
 
