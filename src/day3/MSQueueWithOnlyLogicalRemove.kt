@@ -1,5 +1,6 @@
 package day3
 
+import day1.MSQueue
 import java.util.concurrent.atomic.*
 
 class MSQueueWithOnlyLogicalRemove<E> : QueueWithRemove<E> {
@@ -13,30 +14,40 @@ class MSQueueWithOnlyLogicalRemove<E> : QueueWithRemove<E> {
     }
 
     override fun enqueue(element: E) {
-        // TODO: Copy your implementation.
-        TODO("Implement me!")
+        val newNode = Node(element)
+        while (true) {
+            val currentTail = tail.get()
+            val nextNode = currentTail.next
+            if (nextNode.compareAndSet(null, newNode)) {
+                tail.compareAndSet(currentTail, newNode)
+                return
+            } else {
+                tail.compareAndSet(currentTail, nextNode.get())
+            }
+        }
     }
 
     override fun dequeue(): E? {
-        // TODO: Copy your implementation.
-        // TODO:
-        // TODO: After moving the `head` pointer forward,
-        // TODO: mark the node that contains the extracting
-        // TODO: element as "extracted or removed", restarting
-        // TODO: the operation if this node has already been removed.
-        TODO("Implement me!")
+        while (true) {
+            val currentHead = head.get()
+            val nextNode = currentHead.next.get() ?: return null
+            if (head.compareAndSet(currentHead, nextNode)) {
+                if (!nextNode.markExtractedOrRemoved()) {
+                    continue
+                }
+                val element = nextNode.element
+                nextNode.element = null
+                return element
+            }
+        }
     }
 
     override fun remove(element: E): Boolean {
-        // Traverse the linked list, searching the specified
-        // element. Try to remove the corresponding node if found.
-        // DO NOT CHANGE THIS CODE.
-        var node = head.get()
+        var currentNode = head.get()
         while (true) {
-            val next = node.next.get()
-            if (next == null) return false
-            node = next
-            if (node.element == element && node.remove()) return true
+            val nextNode = currentNode.next.get() ?: return false
+            currentNode = nextNode
+            if (currentNode.element == element && currentNode.remove()) return true
         }
     }
 
@@ -75,13 +86,7 @@ class MSQueueWithOnlyLogicalRemove<E> : QueueWithRemove<E> {
          * removed, or `false` if it has already been
          * removed by [remove] or extracted by [dequeue].
          */
-        fun remove(): Boolean {
-            // TODO: You need to mark the node as "extracted or removed".
-            // TODO: On success, this node is logically removed, and the
-            // TODO: operation should return `true`.
-            // TODO: Otherwise, the node is already either extracted or removed,
-            // TODO: so the operation should return `false`.
-            TODO("Implement me!")
-        }
+        fun remove(): Boolean = markExtractedOrRemoved()
+
     }
 }
