@@ -10,33 +10,85 @@ class FlatCombiningQueue<E> : Queue<E> {
     private val tasksForCombiner = AtomicReferenceArray<Any?>(TASKS_FOR_COMBINER_SIZE)
 
     override fun enqueue(element: E) {
-        // TODO: Make this code thread-safe using the flat-combining technique.
-        // TODO: 1.  Try to become a combiner by
-        // TODO:     changing `combinerLock` from `false` (unlocked) to `true` (locked).
-        // TODO: 2a. On success, apply this operation and help others by traversing
-        // TODO:     `tasksForCombiner`, performing the announced operations, and
-        // TODO:      updating the corresponding cells to `Result`.
-        // TODO: 2b. If the lock is already acquired, announce this operation in
-        // TODO:     `tasksForCombiner` by replacing a random cell state from
-        // TODO:      `null` with the element. Wait until either the cell state
-        // TODO:      updates to `Result` (do not forget to clean it in this case),
-        // TODO:      or `combinerLock` becomes available to acquire.
-        queue.addLast(element)
+        var cellIndex = -1
+        while (true) {
+            if (combinerLock.compareAndSet(false, true)) {
+                try {
+                    queue.addLast(element)
+                    helpOthers()
+                } finally {
+                    combinerLock.set(false)
+                }
+                return
+            } else {
+                if (cellIndex == -1) {
+                    cellIndex = randomCellIndex()
+                }
+                if (tasksForCombiner.compareAndSet(cellIndex, null, element)) {
+                    while (tasksForCombiner[cellIndex] !is Result<*>) {
+                        if (combinerLock.compareAndSet(false, true)) {
+                            try {
+                                helpOthers()
+                            } finally {
+                                combinerLock.set(false)
+                            }
+                        }
+                    }
+                    tasksForCombiner.getAndSet(cellIndex, null) as Result<*>
+                    return
+                }
+            }
+        }
     }
 
     override fun dequeue(): E? {
-        // TODO: Make this code thread-safe using the flat-combining technique.
-        // TODO: 1.  Try to become a combiner by
-        // TODO:     changing `combinerLock` from `false` (unlocked) to `true` (locked).
-        // TODO: 2a. On success, apply this operation and help others by traversing
-        // TODO:     `tasksForCombiner`, performing the announced operations, and
-        // TODO:      updating the corresponding cells to `Result`.
-        // TODO: 2b. If the lock is already acquired, announce this operation in
-        // TODO:     `tasksForCombiner` by replacing a random cell state from
-        // TODO:      `null` with `Dequeue`. Wait until either the cell state
-        // TODO:      updates to `Result` (do not forget to clean it in this case),
-        // TODO:      or `combinerLock` becomes available to acquire.
-        return queue.removeFirstOrNull()
+        var cellIndex = -1
+        while (true) {
+            if (combinerLock.compareAndSet(false, true)) {
+                try {
+                    val result = queue.removeFirstOrNull()
+                    helpOthers()
+                    return result
+                } finally {
+                    combinerLock.set(false)
+                }
+            } else {
+                if (cellIndex == -1) {
+                    cellIndex = randomCellIndex()
+                }
+                if (tasksForCombiner.compareAndSet(cellIndex, null, Dequeue)) {
+                    while (tasksForCombiner[cellIndex] !is Result<*>) {
+                        if (combinerLock.compareAndSet(false, true)) {
+                            try {
+                                helpOthers()
+                            } finally {
+                                combinerLock.set(false)
+                            }
+                        }
+                    }
+                    val result = tasksForCombiner.getAndSet(cellIndex, null) as Result<*>
+                    return result.value as E?
+                }
+            }
+        }
+    }
+
+    private fun helpOthers() {
+        for (i in 0 until tasksForCombiner.length()) {
+            val task = tasksForCombiner[i]
+            if (task != null && task !is Result<*>) {
+                when (task) {
+                    is Dequeue -> {
+                        val result = queue.removeFirstOrNull()
+                        tasksForCombiner.set(i, Result(result))
+                    }
+                    else -> {
+                        queue.addLast(task as E)
+                        tasksForCombiner.set(i, Result(null))
+                    }
+                }
+            }
+        }
     }
 
     private fun randomCellIndex(): Int =
