@@ -2,12 +2,12 @@
 
 package day4
 
-import day4.AtomicArrayWithCAS2Simplified.Status.*
+import day4.AtomicArrayWithCAS2SingleWriter.Status.*
 import java.util.concurrent.atomic.*
-
+import java.util.concurrent.locks.ReentrantLock
 
 // This implementation never stores `null` values.
-class AtomicArrayWithCAS2Simplified<E : Any>(size: Int, initialValue: E) {
+class AtomicArrayWithCAS2SingleWriter<E : Any>(size: Int, initialValue: E) {
     private val array = AtomicReferenceArray<Any?>(size)
 
     init {
@@ -19,7 +19,7 @@ class AtomicArrayWithCAS2Simplified<E : Any>(size: Int, initialValue: E) {
 
     fun get(index: Int): E {
         val element = array[index]
-        if (element is AtomicArrayWithCAS2Simplified<*>.CAS2Descriptor) {
+        if (element is AtomicArrayWithCAS2SingleWriter<*>.CAS2Descriptor) {
             return when {
                 element.status.get() == SUCCESS && element.index1 == index -> element.update1 as E
                 element.status.get() == SUCCESS && element.index2 == index -> element.update2 as E
@@ -39,12 +39,9 @@ class AtomicArrayWithCAS2Simplified<E : Any>(size: Int, initialValue: E) {
         index2: Int, expected2: E, update2: E
     ): Boolean {
         require(index1 != index2) { "The indices should be different" }
-        val descriptor = if (index1 < index2) CAS2Descriptor(
+        val descriptor = CAS2Descriptor(
             index1 = index1, expected1 = expected1, update1 = update1,
             index2 = index2, expected2 = expected2, update2 = update2
-        ) else CAS2Descriptor(
-            index1 = index2, expected1 = expected2, update1 = update2,
-            index2 = index1, expected2 = expected1, update2 = update1
         )
         descriptor.apply()
         return descriptor.status.get() === SUCCESS
@@ -68,10 +65,10 @@ class AtomicArrayWithCAS2Simplified<E : Any>(size: Int, initialValue: E) {
                         }
                         array.compareAndSet(index1, this, expected1)
                     }
-                } else if (currentValue1 is AtomicArrayWithCAS2Simplified<*>.CAS2Descriptor && currentValue1 != this) {
-                    currentValue1.apply()
-                } else if (currentValue2 is AtomicArrayWithCAS2Simplified<*>.CAS2Descriptor && currentValue2 != this) {
-                    currentValue2.apply()
+                } else if (currentValue1 is AtomicArrayWithCAS2SingleWriter<*>.CAS2Descriptor && currentValue1 != this) {
+                    currentValue1.applySafely()
+                } else if (currentValue2 is AtomicArrayWithCAS2SingleWriter<*>.CAS2Descriptor && currentValue2 != this) {
+                    currentValue2.applySafely()
                 } else {
                     status.compareAndSet(UNDECIDED, FAILED)
                     return
@@ -100,6 +97,16 @@ class AtomicArrayWithCAS2Simplified<E : Any>(size: Int, initialValue: E) {
             }
         }
 
+        private val lock = ReentrantLock()
+
+        fun applySafely() {
+            lock.lock()
+            try {
+                apply()
+            } finally {
+                lock.unlock()
+            }
+        }
     }
 
     enum class Status {
